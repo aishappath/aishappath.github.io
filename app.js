@@ -3,6 +3,7 @@ class ChecklistApp {
         this.userId = this.generateUserId();
         this.currentWeek = this.getCurrentWeek();
         this.checklistItems = [];
+        this.allChecklists = {};
         this.init();
     }
 
@@ -17,32 +18,49 @@ class ChecklistApp {
 
     getCurrentWeek() {
         const storedWeek = localStorage.getItem(`${this.userId}_currentWeek`);
-        return storedWeek ? parseInt(storedWeek) : 0;
+        return storedWeek ? parseInt(storedWeek) : 1;  // Start from Week 1
     }
 
     async init() {
-        await this.loadChecklist();
+        await this.loadAllChecklists();
+        this.loadCurrentChecklist();
         this.renderWeek();
         this.renderChecklist();
     }
 
-    async loadChecklist() {
+    async loadAllChecklists() {
         try {
-            // Load the checklist for the current week
-            const response = await fetch(`checklists/week${this.currentWeek}.txt`);
+            const response = await fetch('checklists.txt');
             const text = await response.text();
-            this.checklistItems = text.split('\n').filter(item => item.trim());
             
-            // Load user progress
-            const progress = localStorage.getItem(`${this.userId}_week${this.currentWeek}`);
-            if (progress) {
-                this.completed = new Set(JSON.parse(progress));
-            } else {
-                this.completed = new Set();
-            }
+            // Split the text into weeks
+            const weeks = text.split(/Week \d+:/);
+            
+            // Process each week
+            weeks.forEach((week, index) => {
+                if (week.trim()) {  // Skip empty entries
+                    const missions = week.split(/Mission \d+:/)
+                        .filter(mission => mission.trim())
+                        .map(mission => mission.trim());
+                    
+                    this.allChecklists[index + 1] = missions;
+                }
+            });
         } catch (error) {
-            console.error('Error loading checklist:', error);
-            this.checklistItems = ['Error loading checklist'];
+            console.error('Error loading checklists:', error);
+            this.allChecklists = {};
+        }
+    }
+
+    loadCurrentChecklist() {
+        this.checklistItems = this.allChecklists[this.currentWeek] || [];
+        
+        // Load user progress
+        const progress = localStorage.getItem(`${this.userId}_week${this.currentWeek}`);
+        if (progress) {
+            this.completed = new Set(JSON.parse(progress));
+        } else {
+            this.completed = new Set();
         }
     }
 
@@ -100,12 +118,14 @@ class ChecklistApp {
     }
 
     prepareNextWeek() {
-        if (this.currentWeek < 55) {  // Max 56 weeks (0-55)
+        if (this.currentWeek < 50) {  // Max 50 weeks
             setTimeout(() => {
                 this.currentWeek++;
                 localStorage.setItem(`${this.userId}_currentWeek`, this.currentWeek);
                 this.completed = new Set();
-                this.init();
+                this.loadCurrentChecklist();
+                this.renderWeek();
+                this.renderChecklist();
             }, 1000);  // Small delay to show completion
         }
     }
