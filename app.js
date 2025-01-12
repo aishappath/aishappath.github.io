@@ -114,10 +114,10 @@ class ChecklistApp {
         const checklistDiv = document.getElementById('checklist');
         checklistDiv.innerHTML = '';
 
-        this.checklistItems.forEach((item, index) => {
+        this.checklistItems.slice(1).forEach((item, index) => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'checklist-item';
-            if (this.completed.has(index)) {
+            if (this.completed.has(index + 1)) {
                 itemDiv.classList.add('completed');
             }
 
