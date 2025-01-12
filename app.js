@@ -18,14 +18,56 @@ class ChecklistApp {
 
     getCurrentWeek() {
         const storedWeek = localStorage.getItem(`${this.userId}_currentWeek`);
-        return storedWeek ? parseInt(storedWeek) : 1;  // Start from Week 1
+        return storedWeek ? parseInt(storedWeek) : 1;
     }
 
     async init() {
         await this.loadAllChecklists();
         this.loadCurrentChecklist();
+        this.setupNavigation();
         this.renderWeek();
         this.renderChecklist();
+    }
+
+    setupNavigation() {
+        const nav = document.createElement('div');
+        nav.className = 'navigation';
+        
+        const prevButton = document.createElement('button');
+        prevButton.textContent = '←';
+        prevButton.className = 'nav-button';
+        prevButton.onclick = () => this.navigate(-1);
+        
+        const nextButton = document.createElement('button');
+        nextButton.textContent = '→';
+        nextButton.className = 'nav-button';
+        nextButton.onclick = () => this.navigate(1);
+        
+        nav.appendChild(prevButton);
+        nav.appendChild(nextButton);
+        
+        const weekDisplay = document.getElementById('weekDisplay');
+        weekDisplay.parentNode.insertBefore(nav, weekDisplay.nextSibling);
+        
+        this.updateNavigationButtons();
+    }
+
+    updateNavigationButtons() {
+        const [prevButton, nextButton] = document.querySelectorAll('.nav-button');
+        prevButton.disabled = this.currentWeek <= 1;
+        nextButton.disabled = this.currentWeek >= 50;
+    }
+
+    navigate(delta) {
+        const newWeek = this.currentWeek + delta;
+        if (newWeek >= 1 && newWeek <= 50) {
+            this.currentWeek = newWeek;
+            localStorage.setItem(`${this.userId}_currentWeek`, this.currentWeek);
+            this.loadCurrentChecklist();
+            this.renderWeek();
+            this.renderChecklist();
+            this.updateNavigationButtons();
+        }
     }
 
     async loadAllChecklists() {
@@ -33,17 +75,20 @@ class ChecklistApp {
             const response = await fetch('checklists.txt');
             const text = await response.text();
             
-            // Split the text into weeks
-            const weeks = text.split(/Week \d+:/);
+            const weeksWithHeaders = text.split(/(?=Week \d+:)/);
             
-            // Process each week
-            weeks.forEach((week, index) => {
-                if (week.trim()) {  // Skip empty entries
-                    const missions = week.split(/Mission \d+:/)
-                        .filter(mission => mission.trim())
-                        .map(mission => mission.trim());
-                    
-                    this.allChecklists[index + 1] = missions;
+            weeksWithHeaders.forEach((weekContent) => {
+                if (weekContent.trim()) {
+                    const weekMatch = weekContent.match(/Week (\d+):/);
+                    if (weekMatch) {
+                        const weekNumber = parseInt(weekMatch[1]);
+                        
+                        const missions = weekContent.split(/Mission \d+:/)
+                            .slice(1)
+                            .map(mission => mission.trim());
+                        
+                        this.allChecklists[weekNumber] = missions;
+                    }
                 }
             });
         } catch (error) {
@@ -54,14 +99,6 @@ class ChecklistApp {
 
     loadCurrentChecklist() {
         this.checklistItems = this.allChecklists[this.currentWeek] || [];
-        
-        // Load user progress
-        const progress = localStorage.getItem(`${this.userId}_week${this.currentWeek}`);
-        if (progress) {
-            this.completed = new Set(JSON.parse(progress));
-        } else {
-            this.completed = new Set();
-        }
     }
 
     renderWeek() {
@@ -77,57 +114,18 @@ class ChecklistApp {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'checklist-item';
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = this.completed.has(index);
-            checkbox.addEventListener('change', () => this.toggleItem(index));
+            const missionTitle = document.createElement('div');
+            missionTitle.className = 'mission-title';
+            missionTitle.textContent = `Mission ${index + 1}`;
+            
+            const missionContent = document.createElement('div');
+            missionContent.className = 'mission-content';
+            missionContent.textContent = item;
 
-            const label = document.createElement('label');
-            label.textContent = item;
-            if (this.completed.has(index)) {
-                label.className = 'completed';
-            }
-
-            itemDiv.appendChild(checkbox);
-            itemDiv.appendChild(label);
+            itemDiv.appendChild(missionTitle);
+            itemDiv.appendChild(missionContent);
             checklistDiv.appendChild(itemDiv);
         });
-
-        if (this.isWeekCompleted()) {
-            this.prepareNextWeek();
-        }
-    }
-
-    toggleItem(index) {
-        if (this.completed.has(index)) {
-            this.completed.delete(index);
-        } else {
-            this.completed.add(index);
-        }
-
-        localStorage.setItem(
-            `${this.userId}_week${this.currentWeek}`,
-            JSON.stringify(Array.from(this.completed))
-        );
-
-        this.renderChecklist();
-    }
-
-    isWeekCompleted() {
-        return this.completed.size === this.checklistItems.length;
-    }
-
-    prepareNextWeek() {
-        if (this.currentWeek < 50) {  // Max 50 weeks
-            setTimeout(() => {
-                this.currentWeek++;
-                localStorage.setItem(`${this.userId}_currentWeek`, this.currentWeek);
-                this.completed = new Set();
-                this.loadCurrentChecklist();
-                this.renderWeek();
-                this.renderChecklist();
-            }, 1000);  // Small delay to show completion
-        }
     }
 }
 
