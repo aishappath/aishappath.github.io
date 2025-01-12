@@ -18,7 +18,7 @@ class ChecklistApp {
 
     getCurrentWeek() {
         const storedWeek = localStorage.getItem(`${this.userId}_currentWeek`);
-        return storedWeek ? parseInt(storedWeek) : 1;  // Start from Week 1
+        return storedWeek ? parseInt(storedWeek) : 1;
     }
 
     async init() {
@@ -26,6 +26,50 @@ class ChecklistApp {
         this.loadCurrentChecklist();
         this.renderWeek();
         this.renderChecklist();
+        this.setupNavigation();
+    }
+
+    setupNavigation() {
+        const nav = document.createElement('div');
+        nav.className = 'navigation';
+        
+        const prevButton = document.createElement('button');
+        prevButton.textContent = '← Previous Week';
+        prevButton.className = 'nav-button prev-week';
+        prevButton.onclick = () => this.navigateWeek(-1);
+        
+        const nextButton = document.createElement('button');
+        nextButton.textContent = 'Next Week →';
+        nextButton.className = 'nav-button next-week';
+        nextButton.onclick = () => this.navigateWeek(1);
+        
+        nav.appendChild(prevButton);
+        nav.appendChild(nextButton);
+        
+        const weekDisplay = document.getElementById('weekDisplay');
+        weekDisplay.parentNode.insertBefore(nav, weekDisplay.nextSibling);
+        
+        this.updateNavigationButtons();
+    }
+
+    updateNavigationButtons() {
+        const prevButton = document.querySelector('.prev-week');
+        const nextButton = document.querySelector('.next-week');
+        
+        prevButton.disabled = this.currentWeek <= 1;
+        nextButton.disabled = this.currentWeek >= 50;
+    }
+
+    navigateWeek(delta) {
+        const newWeek = this.currentWeek + delta;
+        if (newWeek >= 1 && newWeek <= 50) {
+            this.currentWeek = newWeek;
+            localStorage.setItem(`${this.userId}_currentWeek`, this.currentWeek);
+            this.loadCurrentChecklist();
+            this.renderWeek();
+            this.renderChecklist();
+            this.updateNavigationButtons();
+        }
     }
 
     async loadAllChecklists() {
@@ -33,12 +77,10 @@ class ChecklistApp {
             const response = await fetch('checklists.txt');
             const text = await response.text();
             
-            // Split the text into weeks
             const weeks = text.split(/Week \d+:/);
             
-            // Process each week
             weeks.forEach((week, index) => {
-                if (week.trim()) {  // Skip empty entries
+                if (week.trim()) {
                     const missions = week.split(/Mission \d+:/)
                         .filter(mission => mission.trim())
                         .map(mission => mission.trim());
@@ -55,7 +97,6 @@ class ChecklistApp {
     loadCurrentChecklist() {
         this.checklistItems = this.allChecklists[this.currentWeek] || [];
         
-        // Load user progress
         const progress = localStorage.getItem(`${this.userId}_week${this.currentWeek}`);
         if (progress) {
             this.completed = new Set(JSON.parse(progress));
@@ -76,6 +117,9 @@ class ChecklistApp {
         this.checklistItems.forEach((item, index) => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'checklist-item';
+            if (this.completed.has(index)) {
+                itemDiv.classList.add('completed');
+            }
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
@@ -83,19 +127,22 @@ class ChecklistApp {
             checkbox.addEventListener('change', () => this.toggleItem(index));
 
             const label = document.createElement('label');
-            label.textContent = item;
-            if (this.completed.has(index)) {
-                label.className = 'completed';
-            }
+            
+            // Add mission title
+            const missionTitle = document.createElement('div');
+            missionTitle.className = 'mission-title';
+            missionTitle.textContent = `Mission ${index + 1}`;
+            label.appendChild(missionTitle);
+            
+            // Add mission content
+            const missionContent = document.createElement('div');
+            missionContent.textContent = item;
+            label.appendChild(missionContent);
 
             itemDiv.appendChild(checkbox);
             itemDiv.appendChild(label);
             checklistDiv.appendChild(itemDiv);
         });
-
-        if (this.isWeekCompleted()) {
-            this.prepareNextWeek();
-        }
     }
 
     toggleItem(index) {
@@ -115,19 +162,6 @@ class ChecklistApp {
 
     isWeekCompleted() {
         return this.completed.size === this.checklistItems.length;
-    }
-
-    prepareNextWeek() {
-        if (this.currentWeek < 50) {  // Max 50 weeks
-            setTimeout(() => {
-                this.currentWeek++;
-                localStorage.setItem(`${this.userId}_currentWeek`, this.currentWeek);
-                this.completed = new Set();
-                this.loadCurrentChecklist();
-                this.renderWeek();
-                this.renderChecklist();
-            }, 1000);  // Small delay to show completion
-        }
     }
 }
 
